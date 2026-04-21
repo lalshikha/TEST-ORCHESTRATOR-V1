@@ -89,17 +89,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'The AI generated invalid JSON. Please try again.' }, { status: 500 });
     }
 
-    // Defensive: AI sometimes wraps the array directly without the testCases key
+    let finalTestCases = [];
+
     if (Array.isArray(parsedJson)) {
-      return NextResponse.json({ testCases: parsedJson });
+        finalTestCases = parsedJson;
+    } else if (parsedJson.testCases && Array.isArray(parsedJson.testCases)) {
+        finalTestCases = parsedJson.testCases;
+    } else {
+        console.error('Missing testCases key. Got:', JSON.stringify(parsedJson).substring(0, 200));
+        return NextResponse.json({ error: "AI response missing 'testCases' array." }, { status: 500 });
     }
 
-    if (!parsedJson.testCases || !Array.isArray(parsedJson.testCases)) {
-      console.error('Missing testCases key. Got:', JSON.stringify(parsedJson).substring(0, 200));
-      return NextResponse.json({ error: "AI response missing 'testCases' array." }, { status: 500 });
-    }
-
-    return NextResponse.json({ testCases: parsedJson.testCases });
+    // FRONTEND COMPATIBILITY FIX
+    return NextResponse.json({ 
+        success: true,
+        data: { testCases: finalTestCases } 
+    });
 
   } catch (error: any) {
     console.error('Generate Test Cases Error:', error);
