@@ -609,7 +609,7 @@ export default function DashboardPage() {
 
               {requirementSource === "jira" && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-3"><label className="block text-[12px] font-medium mb-1.5">Jira URL</label><input value={jiraCreds.url} onChange={e=>handleJiraCredsChange("url", e.target.value)} className={`w-full border p-2.5 rounded-lg text-[13px] ${theme.inputBg} ${theme.border}`} /></div>
                     <div><label className="block text-[12px] font-medium mb-1.5">Email</label><input value={jiraCreds.email} onChange={e=>handleJiraCredsChange("email", e.target.value)} className={`w-full border p-2.5 rounded-lg text-[13px] ${theme.inputBg} ${theme.border}`} /></div>
                     <div className="md:col-span-2"><label className="block text-[12px] font-medium mb-1.5">Token</label><input type="password" value={jiraCreds.token} onChange={e=>handleJiraCredsChange("token", e.target.value)} className={`w-full border p-2.5 rounded-lg text-[13px] ${theme.inputBg} ${theme.border}`} /></div>
