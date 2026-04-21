@@ -18,9 +18,9 @@ Do NOT wrap your response in markdown tags. The output must start with { and end
 JSON SCHEMA REQUIREMENT:
 You MUST return a JSON object with exactly ONE key named "testCases".
 The value of "testCases" MUST be an array of objects.
-Each object in the array MUST have the following structure:
+Each object in the array MUST have exactly the following structure keys:
 {
-  "id": "A unique identifier like TC-01",
+  "scenarioId": "A unique identifier like TC-01",
   "title": "A clear, descriptive title of the test scenario",
   "priority": "High", "Medium", or "Low",
   "type": "Must be exactly 'BDD'",
