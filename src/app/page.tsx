@@ -15,7 +15,7 @@ import {
 
 type StepStatus = "disabled" | "active" | "completed";
 type TabView = "dashboard" | "testPlan" | "testcases" | "analytics";
-type LLMProvider = "groq" | "openai" | "anthropic";
+type LLMProvider = "groq" | "openai";
 type RequirementSource = "jira" | "swagger" | "openapi" | "ado";
 type AuthType = "none" | "bearer" | "apikey" | "basic" | "custom";
 
