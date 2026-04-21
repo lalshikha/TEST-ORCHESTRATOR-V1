@@ -15,7 +15,7 @@ import {
 
 type StepStatus = "disabled" | "active" | "completed";
 type TabView = "dashboard" | "testPlan" | "testcases" | "analytics";
-type LLMProvider = "groq" | "openai" | "anthropic";
+type LLMProvider = "groq" | "openai";
 type RequirementSource = "jira" | "swagger" | "openapi" | "ado";
 type AuthType = "none" | "bearer" | "apikey" | "basic" | "custom";
 
@@ -53,7 +53,9 @@ export default function DashboardPage() {
   const [isTestcasePromptModalOpen, setIsTestcasePromptModalOpen] = useState(false);
 
   const [llmProvider, setLlmProvider] = useState<LLMProvider>("groq");
-  const [apiKeys, setApiKeys] = useState({ groq: "", openai: "", anthropic: "" });
+  const [apiKeys, setApiKeys] = useState({ groq: "", openai: "" });
+  const [verifiedProviders, setVerifiedProviders] = useState<{ groq: boolean; openai: boolean }>({ groq: false, openai: false });
+  const [isValidatingConnection, setIsValidatingConnection] = useState(false);
   const isLlmConfigured = verifiedProviders[llmProvider];
 
   const [requirementSource, setRequirementSource] = useState<RequirementSource>("jira");
@@ -620,7 +622,7 @@ export default function DashboardPage() {
             </div>
             <div className={`p-4 border-t flex justify-end gap-3 ${theme.border} ${theme.panelBgSoft}`}>
               {isLlmConfigured && <button onClick={() => setIsConfigModalOpen(false)} className={`px-4 py-2 font-medium rounded-lg text-[13px] ${theme.textSoft}`}>Close</button>}
-              <button onClick={handleSaveLlmConfig} disabled={isValidatingConnection} className="px-4 py-2 bg-[#3FB950] text-white font-medium rounded-lg text-[13px]">{isValidatingConnection ? "Validating..." : "Save Configuration"}</button>
+              <button onClick={handleSaveLlmConfig} disabled={isValidatingConnection} className={`flex-1 py-2.5 rounded-lg font-semibold text-[13px] ${theme.successBg} text-[#3FB950] border border-[#3FB950]/30 transition-all hover:bg-[#3FB950]/20`}>{isValidatingConnection ? "Validating..." : "Save Configuration"}</button>
             </div>
           </div>
         </div>
