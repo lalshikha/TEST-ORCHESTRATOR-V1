@@ -6,22 +6,14 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { story, testPlan, testcasePrompt, llmProvider, llmApiKey } = body;
 
-    if (!story) {
-      return NextResponse.json({ error: "Story/Requirements data is required" }, { status: 400 });
-    }
-
-    if (!testPlan) {
-      return NextResponse.json({ error: "Test Plan is required to generate test cases" }, { status: 400 });
-    }
-
-    if (!llmApiKey) {
-      return NextResponse.json({ error: "LLM API Key is required" }, { status: 401 });
-    }
+    if (!story) return NextResponse.json({ error: "Story/Requirements data is required" }, { status: 400 });
+    if (!testPlan) return NextResponse.json({ error: "Test Plan is required to generate test cases" }, { status: 400 });
+    if (!llmApiKey) return NextResponse.json({ error: "LLM API Key is required" }, { status: 401 });
 
     let systemPrompt = `You are a world-class QA Automation Architect expert in BDD, Gherkin, and exhaustive test generation.
 
 Your task is to generate professional, exhaustive BDD test cases in raw JSON format based on the provided Requirements and Test Plan.
-Do NOT wrap your response in markdown tags (like \\`\`\`json). The output must start with { and end with }.
+Do NOT wrap your response in markdown tags (like \`\`\`json). The output must start with { and end with }.
 
 JSON SCHEMA REQUIREMENT:
 You MUST return a JSON object with exactly ONE key named "testCases".
@@ -87,15 +79,13 @@ Example formatting for API test steps:
     ${typeof testPlan === 'string' ? testPlan : JSON.stringify(testPlan, null, 2)}
 
     === CUSTOM INSTRUCTIONS (OVERRIDES DEFAULT BEHAVIOR) ===
-    ${testcasePrompt ? testcasePrompt : "No restrictions. You MUST generate maximum coverage scenarios exhaustively covering ALL categories (Smoke, Functional, Negative, Edge, Security, Non-Functional/Performance) with concrete test data."}
+    ${testcasePrompt ? testcasePrompt : "No restrictions."}
 
-    Remember: Return ONLY valid JSON matching the schema. No markdown wrapping. Include concrete TEST DATA in Examples tables prioritizing any user-provided values. Ensure ALL test categories are covered unless explicitly restricted above.`;
+    Remember: Return ONLY valid JSON matching the schema. No markdown wrapping. Include concrete TEST DATA in Examples tables prioritizing any user-provided values.`;
 
     let generatedText = "";
-
     const provider = llmProvider || "groq";
 
-    // --- NEW: Call OpenAI ---
     if (provider === "openai") {
       const openai = new OpenAI({ apiKey: llmApiKey });
       const completion = await openai.chat.completions.create({
@@ -110,7 +100,6 @@ Example formatting for API test steps:
       generatedText = completion.choices[0]?.message?.content || "";
     }
 
-    // Inline LLM call for Groq
     if (provider === "groq") {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -125,7 +114,6 @@ Example formatting for API test steps:
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null);
-        console.error("Groq API Error:", errorData || res.statusText);
         throw new Error(errorData?.error?.message || "Failed to generate test cases from Groq");
       }
 
@@ -133,12 +121,12 @@ Example formatting for API test steps:
       generatedText = data.choices[0]?.message?.content || "";
     }
 
+    const cleanContent = generatedText.replace(/```json/g, '').replace(/```/g, '').trim();
     let parsedJson;
     try {
-      parsedJson = JSON.parse(generatedText);
+      parsedJson = JSON.parse(cleanContent);
     } catch (e) {
-      console.error("Failed to parse JSON response:", generatedText);
-      return NextResponse.json({ error: "The AI generated invalid JSON. Please try again." }, { status: 500 });
+      return NextResponse.json({ error: "The AI generated invalid JSON." }, { status: 500 });
     }
 
     if (!parsedJson.testCases || !Array.isArray(parsedJson.testCases)) {
