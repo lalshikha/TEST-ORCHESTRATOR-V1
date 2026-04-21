@@ -21,10 +21,10 @@ export async function POST(request: Request) {
     }
 
     // 1. FIX: Extremely strict system prompt for JSON mode
-    let systemInstruction = `You are an expert QA Architect. Your task is to generate a comprehensive Enterprise Test Plan based on the provided Jira User Story.\nCRITICAL INSTRUCTION: You MUST return ONLY a valid, parseable JSON object. \nDO NOT include any greetings, explanations, or trailing text. \nDO NOT wrap the output in markdown code blocks (e.g., no \\`\`\`json). \nOutput raw JSON starting with { and ending with }.`;
+    let systemInstruction = `You are an expert QA Architect. Your task is to generate a comprehensive Enterprise Test Plan based on the provided Jira User Story.\nCRITICAL INSTRUCTION: You MUST return ONLY a valid, parseable JSON object. \nDO NOT include any greetings, explanations, or trailing text. \nDO NOT wrap the output in markdown code blocks (e.g., no \`\`\`json). \nOutput raw JSON starting with { and ending with }.`;
 
     if (templateContext && templateContext.trim() !== "") {
-      systemInstruction += `\n\nIMPORTANT FORMATTING RULE:\nYou MUST structure your JSON output to perfectly match the sections and headers found in this reference template:\n"""\n${templateContext}\n"""`;
+      systemInstruction += `\n\nIMPORTANT FORMATTING RULE:\nYou MUST structure your JSON output to perfectly match the sections and headers found in this reference template:\n\"\"\"\n${templateContext}\n\"\"\"`;
     } else {
       systemInstruction += `\n\nSince no template was provided, structure your JSON output exactly with these keys: "testPlanId", "title", "objectives", "scope", "testStrategy", "environmentRequirements", and "risks".`;
     }
@@ -37,9 +37,7 @@ export async function POST(request: Request) {
 
     let generatedContent = "";
 
-    // ==========================================
-    // NEW: Call OpenAI (This was missing!)
-    // ==========================================
+    // Call OpenAI
     if (llmProvider === 'openai') {
       const openai = new OpenAI({ apiKey: llmApiKey });
       const response = await openai.chat.completions.create({
@@ -54,9 +52,7 @@ export async function POST(request: Request) {
       generatedContent = response.choices[0]?.message?.content || "";
     }
 
-    // ==========================================
-    // EXISTING: Call Groq
-    // ==========================================
+    // Call Groq
     if (llmProvider === 'groq') {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -89,10 +85,10 @@ export async function POST(request: Request) {
     }
 
     if (!generatedContent) {
-       throw new Error(`No content returned from ${llmProvider}. Please ensure your API key is valid.`);
+       throw new Error(`No content returned from ${llmProvider}.`);
     }
 
-    // 3. Fallback cleanup just in case the model ignored constraints before parsing
+    // Fallback cleanup
     const cleanContent = generatedContent.replace(/```json/g, '').replace(/```/g, '').trim();
     const parsedPlan = JSON.parse(cleanContent);
 
@@ -105,7 +101,7 @@ export async function POST(request: Request) {
     console.error('Error generating test plan:', error);
     return NextResponse.json({ 
       success: false, 
-      error: error.message || 'An unexpected error occurred during test plan generation.' 
+      error: error.message || 'An unexpected error occurred.' 
     }, { status: 500 });
   }
 }
