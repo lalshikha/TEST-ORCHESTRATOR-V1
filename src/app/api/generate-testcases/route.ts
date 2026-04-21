@@ -1,3 +1,4 @@
+import OpenAI from 'openai';
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -17,29 +18,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "LLM API Key is required" }, { status: 401 });
     }
 
-    const isApiTest = story.source === "swagger" || story.source === "openapi";
+    let systemPrompt = `You are a world-class QA Automation Architect expert in BDD, Gherkin, and exhaustive test generation.
 
-    let systemPrompt = `You are an expert QA Automation Engineer specializing in BDD (Behavior-Driven Development) test case generation.
-Your task is to generate comprehensive, production-ready BDD scenarios in Gherkin format based on the provided requirements and test plan.
+Your task is to generate professional, exhaustive BDD test cases in raw JSON format based on the provided Requirements and Test Plan.
+Do NOT wrap your response in markdown tags (like \\`\`\`json). The output must start with { and end with }.
 
-Return your output as a RAW JSON object. DO NOT wrap the JSON in markdown blocks. DO NOT add any conversational text before or after the JSON.
-
-The JSON MUST exactly match this schema:
+JSON SCHEMA REQUIREMENT:
+You MUST return a JSON object with exactly ONE key named "testCases".
+The value of "testCases" MUST be an array of objects.
+Each object in the array MUST have the following structure:
 {
-  "testCases": [
-    {
-      "scenarioId": "TC-001",
-      "title": "Clear, concise title",
-      "priority": "High|Medium|Low",
-      "type": "UI|API|Functional|Security|Performance|Edge Case",
-      "steps": [
-        "Given ...",
-        "When ...",
-        "Then ...",
-        "And ..."
-      ],
-      "expectedResult": "Brief description of the expected outcome"
-    }
+  "id": "A unique identifier like TC-01",
+  "title": "A clear, descriptive title of the test scenario",
+  "priority": "High", "Medium", or "Low",
+  "type": "Must be exactly 'BDD'",
+  "category": "One of: Smoke, Functional, Negative, Edge, Security, Performance, UI",
+  "steps": [
+    "Given ...",
+    "When ...",
+    "Then ..."
   ]
 }
 
@@ -55,24 +52,19 @@ UNLESS the user explicitly restricts the scope in the Custom Instructions, you M
 TEST DATA RULE:
 - Always use concrete, realistic test data in your 'Examples' tables instead of generic placeholders.
 - Provide actual SQL injection strings (e.g., '1 OR 1=1'), XSS scripts (e.g., '<script>alert(1)</script>'), and concrete invalid data (e.g., '!@#', 'abc').
-- If the user provides specific valid or invalid test data in the custom instructions, you MUST prioritize and include it directly in your scenarios.`;
+- If the user provides specific valid or invalid test data in the custom instructions, you MUST prioritize and include their data in your scenarios.
+`;
 
-    if (isApiTest) {
-      systemPrompt += `\n\nAPI SPECIFIC INSTRUCTIONS:
-1. DO NOT write generic steps like "Then the response should be valid".
-2. Include explicit, strict assertions for status codes, headers, and specific fields in the response body.
-3. Generate Data-Driven tests using "Scenario Outline" and "Examples" tables for multiple inputs.
-4. Include Contract/Schema Validation (Asserting that the response structure perfectly matches the expected JSON schema).
-5. Include explicit assertions for field types (e.g., 'And "category.id" should be a number').
-
-Example of expected API step formatting:
-"Scenario Outline: Retrieve pet successfully with valid petId",
-"Given the API base URL is set",
+    if (story.source?.toLowerCase() === 'swagger') {
+       systemPrompt += `\n\nAPI/SWAGGER SPECIFIC INSTRUCTIONS:
+1. Ensure the 'When' steps explicitly mention the HTTP method (GET, POST, PUT, DELETE) and the precise endpoint path.
+2. Ensure the 'Then' steps explicitly validate the exact HTTP status codes (200, 201, 400, 401, 403, 404, 500).
+3. If path parameters exist (e.g., /pet/{petId}), generate boundary and invalid boundary tests for that specific parameter.
+4. Use Scenario Outlines heavily to iterate through multiple HTTP response scenarios.
+Example formatting for API test steps:
+"Given the API base URL is configured",
 "When I send a GET request to '/pet/<petId>'",
-"Then the response status code should be 200",
-"And the response content type should be 'application/json'",
-"And the response body should contain 'id' equal to <petId>",
-"And 'category.id' should be a number",
+"Then the response status code should be <statusCode>",
 "Examples:",
 "| petId |",
 "| 1     |",
@@ -101,8 +93,24 @@ Example of expected API step formatting:
 
     let generatedText = "";
 
-    // Inline LLM call
     const provider = llmProvider || "groq";
+
+    // --- NEW: Call OpenAI ---
+    if (provider === "openai") {
+      const openai = new OpenAI({ apiKey: llmApiKey });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      });
+      generatedText = completion.choices[0]?.message?.content || "";
+    }
+
+    // Inline LLM call for Groq
     if (provider === "groq") {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -114,55 +122,33 @@ Example of expected API step formatting:
           response_format: { type: "json_object" }
         })
       });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        console.error("Groq API Error:", errorData || res.statusText);
+        throw new Error(errorData?.error?.message || "Failed to generate test cases from Groq");
+      }
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || "Groq API error");
-      generatedText = data.choices[0].message.content;
-    } else if (provider === "openai") {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + llmApiKey },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-          temperature: 0.1,
-          response_format: { type: "json_object" }
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || "OpenAI API error");
-      generatedText = data.choices[0].message.content;
-    } else if (provider === "anthropic") {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { 
-          "x-api-key": llmApiKey, 
-          "anthropic-version": "2023-06-01", 
-          "content-type": "application/json" 
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022",
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-          max_tokens: 4000,
-          temperature: 0.1
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || "Anthropic API error");
-      generatedText = data.content[0].text;
+      generatedText = data.choices[0]?.message?.content || "";
     }
 
-    let cleanJsonStr = generatedText.trim();
-    if (cleanJsonStr.startsWith("```json")) cleanJsonStr = cleanJsonStr.substring(7);
-    else if (cleanJsonStr.startsWith("```")) cleanJsonStr = cleanJsonStr.substring(3);
-    if (cleanJsonStr.endsWith("```")) cleanJsonStr = cleanJsonStr.substring(0, cleanJsonStr.length - 3);
-    cleanJsonStr = cleanJsonStr.trim();
+    let parsedJson;
+    try {
+      parsedJson = JSON.parse(generatedText);
+    } catch (e) {
+      console.error("Failed to parse JSON response:", generatedText);
+      return NextResponse.json({ error: "The AI generated invalid JSON. Please try again." }, { status: 500 });
+    }
 
-    const result = JSON.parse(cleanJsonStr);
+    if (!parsedJson.testCases || !Array.isArray(parsedJson.testCases)) {
+      return NextResponse.json({ error: "The AI response did not contain a valid 'testCases' array." }, { status: 500 });
+    }
 
-    return NextResponse.json({ success: true, data: result });
+    return NextResponse.json({ testCases: parsedJson.testCases });
+
   } catch (error: any) {
     console.error("Generate Test Cases Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to generate test cases" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "An unexpected error occurred" }, { status: 500 });
   }
 }
