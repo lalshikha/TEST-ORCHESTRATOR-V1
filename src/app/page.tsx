@@ -54,7 +54,9 @@ export default function DashboardPage() {
 
   const [llmProvider, setLlmProvider] = useState<LLMProvider>("groq");
   const [apiKeys, setApiKeys] = useState({ groq: "", openai: "", anthropic: "" });
-  const isLlmConfigured = !!apiKeys[llmProvider] && apiKeys[llmProvider].trim().length > 0;
+  const [verifiedProviders, setVerifiedProviders] = useState<{ groq: boolean; openai: boolean; anthropic: boolean }>({ groq: false, openai: false, anthropic: false });
+  const [isValidatingConnection, setIsValidatingConnection] = useState(false);
+  const isLlmConfigured = verifiedProviders[llmProvider];
 
   const [requirementSource, setRequirementSource] = useState<RequirementSource>("jira");
   const [requirementsContext, setRequirementsContext] = useState<RequirementContext | null>(null);
@@ -121,14 +123,46 @@ export default function DashboardPage() {
   }, [requirementsContext]);
 
   const showNotification = (msg: string) => { setNotification(msg); setTimeout(() => setNotification(null), 4000); };
-  const handleKeyChange = (provider: LLMProvider, value: string) => setApiKeys(prev => ({ ...prev, [provider]: value }));
+  const handleKeyChange = (provider: LLMProvider, value: string) => {
+    setApiKeys(prev => ({ ...prev, [provider]: value }));
+    setVerifiedProviders(prev => ({ ...prev, [provider]: false }));
+  };
   const handleJiraCredsChange = (field: string, value: string) => setJiraCreds(prev => ({ ...prev, [field]: value }));
 
-  const handleSaveLlmConfig = () => {
-    if (!apiKeys[llmProvider]?.trim()) return alert(`Enter ${llmProvider} API key.`);
-    setIsConfigModalOpen(false);
-    if (!requirementsContext) { setStep1Status("active"); setStep2Status("disabled"); setStep3Status("disabled"); }
-    showNotification("Configuration saved.");
+  const handleSaveLlmConfig = async () => {
+    const apiKey = apiKeys[llmProvider]?.trim();
+    if (!apiKey) return alert(`Enter ${llmProvider} API key.`);
+
+    setIsValidatingConnection(true);
+    try {
+      const response = await fetch('/api/validate-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: llmProvider, apiKey })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setVerifiedProviders(prev => ({ ...prev, [llmProvider]: false }));
+        alert(data.error || `Failed to validate ${llmProvider} API key.`);
+        return;
+      }
+
+      setVerifiedProviders(prev => ({ ...prev, [llmProvider]: true }));
+      setIsConfigModalOpen(false);
+      if (!requirementsContext) {
+        setStep1Status("active");
+        setStep2Status("disabled");
+        setStep3Status("disabled");
+      }
+      showNotification("Configuration saved and verified.");
+    } catch (error) {
+      setVerifiedProviders(prev => ({ ...prev, [llmProvider]: false }));
+      alert("Unable to validate connection. Please try again.");
+    } finally {
+      setIsValidatingConnection(false);
+    }
   };
 
   const applyLoadedRequirements = (ctx: RequirementContext, msg = "Requirements loaded.") => {
@@ -588,7 +622,8 @@ export default function DashboardPage() {
             </div>
             <div className={`p-4 border-t flex justify-end gap-3 ${theme.border} ${theme.panelBgSoft}`}>
               {isLlmConfigured && <button onClick={() => setIsConfigModalOpen(false)} className={`px-4 py-2 font-medium rounded-lg text-[13px] ${theme.textSoft}`}>Close</button>}
-              <button onClick={handleSaveLlmConfig} className="px-4 py-2 bg-[#3FB950] text-white font-medium rounded-lg text-[13px]">Save Configuration</button>
+              <button onClick={handleSaveLlmConfig}
+                disabled={isValidatingConnection} className="px-4 py-2 bg-[#3FB950] text-white font-medium rounded-lg text-[13px]">{isValidatingConnection ? "Validating..." : "Save Configuration"}</button>
             </div>
           </div>
         </div>
