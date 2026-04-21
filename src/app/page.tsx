@@ -15,7 +15,7 @@ import {
 
 type StepStatus = "disabled" | "active" | "completed";
 type TabView = "dashboard" | "testPlan" | "testcases" | "analytics";
-type LLMProvider = "groq" | "openai";
+type LLMProvider = "groq" | "openai" | "anthropic";
 type RequirementSource = "jira" | "swagger" | "openapi" | "ado";
 type AuthType = "none" | "bearer" | "apikey" | "basic" | "custom";
 
@@ -53,8 +53,8 @@ export default function DashboardPage() {
   const [isTestcasePromptModalOpen, setIsTestcasePromptModalOpen] = useState(false);
 
   const [llmProvider, setLlmProvider] = useState<LLMProvider>("groq");
-  const [apiKeys, setApiKeys] = useState({ groq: "", openai: "" });
-  const isLlmConfigured = !!apiKeys[llmProvider] && apiKeys[llmProvider].trim().length > 0;
+  const [apiKeys, setApiKeys] = useState({ groq: "", openai: "", anthropic: "" });
+  const isLlmConfigured = verifiedProviders[llmProvider];
 
   const [requirementSource, setRequirementSource] = useState<RequirementSource>("jira");
   const [requirementsContext, setRequirementsContext] = useState<RequirementContext | null>(null);
@@ -121,14 +121,46 @@ export default function DashboardPage() {
   }, [requirementsContext]);
 
   const showNotification = (msg: string) => { setNotification(msg); setTimeout(() => setNotification(null), 4000); };
-  const handleKeyChange = (provider: LLMProvider, value: string) => setApiKeys(prev => ({ ...prev, [provider]: value }));
+  const handleKeyChange = (provider: LLMProvider, value: string) => {
+    setApiKeys(prev => ({ ...prev, [provider]: value }));
+    setVerifiedProviders(prev => ({ ...prev, [provider]: false }));
+  };
   const handleJiraCredsChange = (field: string, value: string) => setJiraCreds(prev => ({ ...prev, [field]: value }));
 
-  const handleSaveLlmConfig = () => {
-    if (!apiKeys[llmProvider]?.trim()) return alert(`Enter ${llmProvider} API key.`);
-    setIsConfigModalOpen(false);
-    if (!requirementsContext) { setStep1Status("active"); setStep2Status("disabled"); setStep3Status("disabled"); }
-    showNotification("Configuration saved.");
+  const handleSaveLlmConfig = async () => {
+    const apiKey = apiKeys[llmProvider]?.trim();
+    if (!apiKey) return alert(`Enter ${llmProvider} API key.`);
+
+    setIsValidatingConnection(true);
+    try {
+      const response = await fetch('/api/validate-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: llmProvider, apiKey })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setVerifiedProviders(prev => ({ ...prev, [llmProvider]: false }));
+        alert(data.error || `Failed to validate ${llmProvider} API key.`);
+        return;
+      }
+
+      setVerifiedProviders(prev => ({ ...prev, [llmProvider]: true }));
+      setIsConfigModalOpen(false);
+      if (!requirementsContext) {
+        setStep1Status("active");
+        setStep2Status("disabled");
+        setStep3Status("disabled");
+      }
+      showNotification("Configuration saved and verified.");
+    } catch (error) {
+      setVerifiedProviders(prev => ({ ...prev, [llmProvider]: false }));
+      alert("Unable to validate connection. Please try again.");
+    } finally {
+      setIsValidatingConnection(false);
+    }
   };
 
   const applyLoadedRequirements = (ctx: RequirementContext, msg = "Requirements loaded.") => {
@@ -582,13 +614,13 @@ export default function DashboardPage() {
             <div className="p-5 space-y-5">
               <div>
                 <label className="block text-[12px] font-medium mb-2">Provider</label>
-                <div className="flex gap-2">{(["groq", "openai"] as LLMProvider[]).map(p => <button key={p} onClick={() => setLlmProvider(p)} className={`flex-1 py-2 rounded-lg text-[12px] font-semibold uppercase border ${llmProvider === p ? "border-[#2F81F7] bg-[#2F81F7]/10 text-[#2F81F7]" : theme.border}`}>{p}</button>)}</div>
+                <div className="flex gap-2">{(["groq", "openai", "anthropic"] as LLMProvider[]).map(p => <button key={p} onClick={() => setLlmProvider(p)} className={`flex-1 py-2 rounded-lg text-[12px] font-semibold uppercase border ${llmProvider === p ? "border-[#2F81F7] bg-[#2F81F7]/10 text-[#2F81F7]" : theme.border}`}>{p}</button>)}</div>
               </div>
               <div><label className="block text-[12px] font-medium mb-1.5"><Key className="w-3.5 h-3.5 inline" /> API Key</label><input type="password" value={apiKeys[llmProvider]} onChange={e => handleKeyChange(llmProvider, e.target.value)} className={`w-full border p-2.5 rounded-lg text-[13px] outline-none ${theme.inputBg} ${theme.border}`} /></div>
             </div>
             <div className={`p-4 border-t flex justify-end gap-3 ${theme.border} ${theme.panelBgSoft}`}>
               {isLlmConfigured && <button onClick={() => setIsConfigModalOpen(false)} className={`px-4 py-2 font-medium rounded-lg text-[13px] ${theme.textSoft}`}>Close</button>}
-              <button onClick={handleSaveLlmConfig} className="px-4 py-2 bg-[#3FB950] text-white font-medium rounded-lg text-[13px]">Save Configuration</button>
+              <button onClick={handleSaveLlmConfig} disabled={isValidatingConnection} className="px-4 py-2 bg-[#3FB950] text-white font-medium rounded-lg text-[13px]">{isValidatingConnection ? "Validating..." : "Save Configuration"}</button>
             </div>
           </div>
         </div>
