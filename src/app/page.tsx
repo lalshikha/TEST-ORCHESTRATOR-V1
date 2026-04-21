@@ -616,7 +616,7 @@ export default function DashboardPage() {
             <div className="p-5 space-y-5">
               <div>
                 <label className="block text-[12px] font-medium mb-2">Provider</label>
-                <div className="flex gap-2">{(["groq", "openai""] as LLMProvider[]).map(p => <button key={p} onClick={() => setLlmProvider(p)} className={`flex-1 py-2 rounded-lg text-[12px] font-semibold uppercase border ${llmProvider === p ? "border-[#2F81F7] bg-[#2F81F7]/10 text-[#2F81F7]" : theme.border}`}>{p}</button>)}</div>
+                <div className="flex gap-2">{(["groq", "openai"] as LLMProvider[]).map(p => <button key={p} onClick={() => setLlmProvider(p)} className={`flex-1 py-2 rounded-lg text-[12px] font-semibold uppercase border ${llmProvider === p ? "border-[#2F81F7] bg-[#2F81F7]/10 text-[#2F81F7]" : theme.border}`}>{p}</button>)}</div>
               </div>
               <div><label className="block text-[12px] font-medium mb-1.5"><Key className="w-3.5 h-3.5 inline" /> API Key</label><input type="password" value={apiKeys[llmProvider]} onChange={e => handleKeyChange(llmProvider, e.target.value)} className={`w-full border p-2.5 rounded-lg text-[13px] outline-none ${theme.inputBg} ${theme.border}`} /></div>
             </div>
