@@ -299,21 +299,13 @@ export default function DashboardPage() {
 
   const renderDonutChart = () => {
     if (!stats) return null;
-    const data = Object.entries(stats.byType).map(([k, v]: any) => ({ name: k, value: v }));
-    let cumulative = 0;
-    return (
-      <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
-        {data.map((slice: any, i: number) => {
-          const strokeDasharray = `${(slice.value / stats.total) * 100} 100`;
-          const strokeDashoffset = -cumulative;
-          cumulative += (slice.value / stats.total) * 100;
-          return (
-            <circle key={slice.name} r="16" cx="18" cy="18" fill="transparent" stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth="3.5" strokeDasharray={strokeDasharray} strokeDashoffset={strokeDashoffset} className="transition-all duration-1000 ease-out" />
-          );
-        })}
-      </svg>
-    );
-  };
+    const entries = Object.entries(stats.byType);
+    let cumulativePercent = 0;
+    const getCoordinatesForPercent = (percent: number) => {
+      const x = Math.cos(2 * Math.PI * percent);
+      const y = Math.sin(2 * Math.PI * percent);
+      return [x, y];
+    };
     return (
       <svg viewBox="-1 -1 2 2" className="w-full h-full transform -rotate-90">
         {entries.map(([type, count]: any, i) => {
