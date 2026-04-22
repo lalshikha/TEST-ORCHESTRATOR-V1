@@ -35,7 +35,7 @@ Each object in the array MUST have exactly the following structure keys:
   ]
 }
 
-If a scenario outline requires examples (like boundary tests or API params), include them in the "examples" array of objects. If no examples are needed, omit the key or return an empty array.
+CRITICAL: The "examples" array is explicitly for BDD Data Tables (Scenario Outlines). Use concrete test data in the examples array like SQL injections, explicit boundaries, invalid formats, or actual auth data. If no examples are needed for a specific scenario, you can omit the "examples" key or leave it empty.
 
 CRITICAL EXHAUSTIVE COVERAGE RULE:
 UNLESS the user explicitly restricts the scope in the Custom Instructions, you MUST generate an EXHAUSTIVE suite of test cases covering ALL of the following categories by default:
@@ -47,7 +47,7 @@ UNLESS the user explicitly restricts the scope in the Custom Instructions, you M
 6. Non-Functional / Performance (Response times, payload sizes)
 
 TEST DATA RULE:
-- Always use concrete, realistic test data in your 'Examples' tables instead of generic placeholders.
+- Always use concrete, realistic test data in your 'Examples' array instead of generic placeholders.
 - Provide actual SQL injection strings (e.g., '1 OR 1=1'), XSS scripts (e.g., '<script>alert(1)</script>'), and concrete invalid data (e.g., '!@#', 'abc').
 - If the user provides specific valid or invalid test data in the custom instructions, you MUST prioritize and include their data in your scenarios.
 `;
@@ -61,7 +61,7 @@ TEST DATA RULE:
     } else {
        systemPrompt += `\n\nUI/FUNCTIONAL SPECIFIC INSTRUCTIONS:
 1. Focus on specific user actions, exact UI elements, and concrete assertions.
-2. Incorporate explicit test data directly into the steps or Examples tables.
+2. Incorporate explicit test data directly into the steps or Examples array.
 3. Explicitly test standard UI security/validation checks (like XSS in text inputs, SQL injection in search fields) using concrete injection strings.`;
     }
 
@@ -78,7 +78,7 @@ TEST DATA RULE:
     === CUSTOM INSTRUCTIONS (OVERRIDES DEFAULT BEHAVIOR) ===
     ${testcasePrompt ? testcasePrompt : "No restrictions. You MUST generate maximum coverage scenarios exhaustively covering ALL categories (Smoke, Functional, Negative, Edge, Security, Non-Functional/Performance) with concrete test data."}
 
-    Remember: Return ONLY valid JSON matching the schema. No markdown wrapping. Include concrete TEST DATA in Examples arrays prioritizing any user-provided values.`;
+    Remember: You MUST output ONLY valid JSON matching the exact schema. Output a raw JSON object. Do not include markdown backticks. Include concrete TEST DATA in Examples array prioritizing any user-provided values.`;
 
     let generatedText = "";
     const provider = (llmProvider || "groq").toLowerCase();
@@ -91,8 +91,7 @@ TEST DATA RULE:
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.1,
-        response_format: { type: "json_object" }
+        temperature: 0.1
       });
       generatedText = completion.choices[0]?.message?.content || "";
     } else {
@@ -102,8 +101,7 @@ TEST DATA RULE:
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-          temperature: 0.1,
-          response_format: { type: "json_object" }
+          temperature: 0.1
         })
       });
 
