@@ -106,15 +106,20 @@ export default function DashboardPage() {
 
   const stats = useMemo(() => {
     if (!testcasesData?.testCases) return null;
-    const cases = testcasesData.testCases;
-    let totalSteps = 0, edgeCases = 0;
-    cases.forEach((c: any) => {
-      if (c.steps && Array.isArray(c.steps)) totalSteps += c.steps.length;
-      const joined = `${c.type || ""} ${c.title || ""}`.toLowerCase();
-      if (joined.includes("edge") || joined.includes("boundary") || joined.includes("negative") || joined.includes("invalid") || joined.includes("error")) edgeCases++;
-    });
-    const byType = cases.reduce((acc: any, curr: any) => { acc[curr.type || "Standard"] = (acc[curr.type || "Standard"] || 0) + 1; return acc; }, {});
-    return { total: cases.length, totalSteps, timeSaved: cases.length * 15, edgeCases, byType };
+    const tcs = testcasesData.testCases;
+    const byType = tcs.reduce((acc: any, tc: any) => {
+      const cat = tc.category || "Uncategorized";
+      acc[cat] = (acc[cat] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      total: tcs.length,
+      byType,
+      totalSteps: tcs.reduce((a: number, c: any) => a + (c.steps?.length || 0), 0),
+      timeSaved: tcs.length * 15,
+      edgeCases: tcs.filter((c: any) => c.category?.toLowerCase().includes("edge")).length
+    };
   }, [testcasesData]);
 
   const requirementPayload = useMemo(() => {
@@ -294,9 +299,21 @@ export default function DashboardPage() {
 
   const renderDonutChart = () => {
     if (!stats) return null;
-    const entries = Object.entries(stats.byType);
-    let cumulativePercent = 0;
-    const getCoordinatesForPercent = (percent: number) => { const x = Math.cos(2 * Math.PI * percent); const y = Math.sin(2 * Math.PI * percent); return [x, y]; };
+    const data = Object.entries(stats.byType).map(([k, v]: any) => ({ name: k, value: v }));
+    let cumulative = 0;
+    return (
+      <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
+        {data.map((slice: any, i: number) => {
+          const strokeDasharray = `${(slice.value / stats.total) * 100} 100`;
+          const strokeDashoffset = -cumulative;
+          cumulative += (slice.value / stats.total) * 100;
+          return (
+            <circle key={slice.name} r="16" cx="18" cy="18" fill="transparent" stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth="3.5" strokeDasharray={strokeDasharray} strokeDashoffset={strokeDashoffset} className="transition-all duration-1000 ease-out" />
+          );
+        })}
+      </svg>
+    );
+  };
     return (
       <svg viewBox="-1 -1 2 2" className="w-full h-full transform -rotate-90">
         {entries.map(([type, count]: any, i) => {
@@ -575,9 +592,19 @@ export default function DashboardPage() {
               <div><h2 className="text-2xl font-semibold">Coverage Analytics</h2><p className={`text-[13px] mt-1 ${theme.textSoft}`}>Metrics derived from generated models.</p></div>
               <button onClick={() => setActiveTab("testcases")} className={`px-4 py-2 border rounded-lg text-[13px] font-medium ${theme.card} ${theme.border}`}>View Output</button>
             </header>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
               {[{l: "Scenarios", v: stats.total, i: ListChecks, c: "text-[#2F81F7]"}, {l: "BDD Steps", v: stats.totalSteps, i: ListOrdered, c: "text-[#A371F7]"}, {l: "Time Saved (m)", v: stats.timeSaved, i: Zap, c: "text-[#3FB950]"}, {l: "Edge Cases", v: stats.edgeCases, i: ShieldAlert, c: "text-[#FF6B6B]"}].map(m => (
                 <div key={m.l} className={`p-5 rounded-xl border ${theme.card} ${theme.border}`}><div className="flex items-center gap-2 mb-2"><m.i className={`w-4 h-4 ${m.c}`} /><span className={`text-[11px] font-semibold uppercase ${theme.textSoft}`}>{m.l}</span></div><span className="text-3xl font-bold">{m.v}</span></div>
+              ))}
+              {Object.entries(stats.byType).map(([cat, count]: any, i) => (
+                <div key={cat} className={`p-5 rounded-xl border ${theme.card} ${theme.border}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-3 h-3 rounded-full flex-none" style={{background: CHART_COLORS[i % CHART_COLORS.length]}} />
+                    <span className={`text-[11px] font-semibold uppercase ${theme.textSoft}`}>{cat}</span>
+                  </div>
+                  <span className="text-3xl font-bold">{count}</span>
+                  <span className={`text-[11px] ml-2 ${theme.textSoft}`}>{Math.round(count/stats.total*100)}%</span>
+                </div>
               ))}
             </div>
             <div className={`rounded-xl border flex flex-col md:flex-row ${theme.card} ${theme.border}`}>
@@ -603,7 +630,26 @@ export default function DashboardPage() {
               <div><h2 className="text-2xl font-semibold">BDD Test Cases</h2></div>
               {testcasesData && <div className="flex gap-2"><button onClick={exportMarkdown} className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] bg-[#A371F7]/10 border border-[#A371F7]/30 text-[#A371F7]"><FileDown className="w-4 h-4"/> MD</button><button onClick={exportCSV} className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-[13px] ${theme.border} ${theme.panelBgMuted}`}><FileDown className="w-4 h-4"/> CSV</button></div>}
             </header>
-            {testcasesData ? <div ref={testcasesRef} className="flex flex-col gap-4">{testcasesData.testCases?.map((tc: any, i: number) => (<div key={i} className={`p-5 rounded-xl border ${theme.card} ${theme.border}`}><div className="flex gap-2 mb-3"><span className="px-2 py-1 rounded text-[11px] font-semibold border bg-[#2F81F7]/10 text-[#2F81F7] border-[#2F81F7]/20">{tc.scenarioId}</span><span className={`px-2 py-1 rounded text-[11px] font-semibold border ${tc.priority==="High"?"bg-[#FF6B6B]/10 text-[#FF6B6B] border-[#FF6B6B]/20":"bg-[#D29922]/10 text-[#D29922] border-[#D29922]/20"}`}>{tc.priority}</span>{tc.type && <span className="px-2 py-1 rounded text-[11px] font-semibold border bg-[#14b8a6]/10 text-[#14b8a6] border-[#14b8a6]/20">{tc.type}</span>}{tc.category && <span className="px-2 py-1 rounded text-[11px] font-semibold border bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/20">{tc.category}</span>}</div><h3 className="font-semibold mb-3">{tc.title}</h3><div className={`p-4 rounded-lg font-mono text-[13px] border ${isDarkMode?"bg-[#0B0F14] border-[#30363D]":"bg-[#F8FAFC] border-[#D0D7DE]"}`}>{(tc.steps||[]).map((step:string, j:number)=><div key={j} className={step.startsWith("Given")?"text-[#2F81F7]":step.startsWith("When")?"text-[#A371F7]":step.startsWith("Then")?"text-[#3FB950]":""}>{step}</div>)}{tc.examples && tc.examples.length > 0 && (<div className="mt-3 overflow-hidden border border-slate-700/50 rounded-lg"><table className="w-full text-left text-[12px]"><thead className="bg-slate-800/50 text-slate-400"><tr>{Object.keys(tc.examples[0]).map(k => <th key={k} className="px-3 py-1.5 border-b border-slate-700/50 font-medium">{k}</th>)}</tr></thead><tbody>{tc.examples.map((ex:any, i:number) => <tr key={i} className="border-b border-slate-700/50 last:border-0 hover:bg-slate-800/30">{Object.values(ex).map((val:any, j:number) => <td key={j} className="px-3 py-1.5 font-mono text-[#D29922]">{String(val)}</td>)}</tr>)}</tbody></table></div>)}</div></div>))}</div> : <div className={`text-center p-12 border border-dashed rounded-xl ${theme.panelBgSoft} ${theme.border}`}><ListChecks className="w-8 h-8 mx-auto mb-3 text-gray-400" /><h3 className="text-[16px] font-semibold">No Scenarios</h3></div>}
+            {testcasesData ? <div ref={testcasesRef} className="flex flex-col gap-4">{testcasesData.testCases?.map((tc: any, i: number) => (<div key={i} className={`p-5 rounded-xl border ${theme.card} ${theme.border}`}><div className="flex gap-2 mb-3"><span className="px-2 py-1 rounded text-[11px] font-semibold border bg-[#2F81F7]/10 text-[#2F81F7] border-[#2F81F7]/20">{tc.scenarioId}</span><span className={`px-2 py-1 rounded text-[11px] font-semibold border ${tc.priority==="High"?"bg-[#FF6B6B]/10 text-[#FF6B6B] border-[#FF6B6B]/20":"bg-[#D29922]/10 text-[#D29922] border-[#D29922]/20"}`}>{tc.priority}</span>{tc.type && <span className="px-2 py-1 rounded text-[11px] font-semibold border bg-[#14b8a6]/10 text-[#14b8a6] border-[#14b8a6]/20">{tc.type}</span>}{tc.category && <span className="px-2 py-1 rounded text-[11px] font-semibold border bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/20">{tc.category}</span>}</div><h3 className="font-semibold mb-3">{tc.title}</h3><div className={`p-4 rounded-lg font-mono text-[13px] border ${isDarkMode?"bg-[#0B0F14] border-[#30363D]":"bg-[#F8FAFC] border-[#D0D7DE]"}`}>{(tc.steps||[]).map((step:string, j:number)=><div key={j} className={step.startsWith("Given")?"text-[#2F81F7]":step.startsWith("When")?"text-[#A371F7]":step.startsWith("Then")?"text-[#3FB950]":""}>{step}</div>)}
+{tc.examples && tc.examples.length > 0 && (
+  <div className="mt-4 border border-[#30363D] rounded-lg overflow-hidden">
+    <div className="bg-[#161B22] text-[#9DA7B3] text-[11px] font-semibold uppercase tracking-wider px-3 py-1.5 border-b border-[#30363D]">Examples</div>
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-[12px] whitespace-nowrap">
+        <thead className="bg-[#0B0F14] text-[#E6EDF3]">
+          <tr>{Object.keys(tc.examples[0]).map((k) => <th key={k} className="px-3 py-1.5 border-b border-[#30363D] font-semibold">{k}</th>)}</tr>
+        </thead>
+        <tbody className="bg-[#0B0F14]">
+          {tc.examples.map((ex:any, idx:number) => (
+            <tr key={idx} className="border-b border-[#30363D]/50 last:border-0 hover:bg-[#161B22]">
+              {Object.values(ex).map((val:any, jIdx:number) => <td key={jIdx} className="px-3 py-1.5 font-mono text-[#D29922]">{String(val)}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}</div></div>))}</div> : <div className={`text-center p-12 border border-dashed rounded-xl ${theme.panelBgSoft} ${theme.border}`}><ListChecks className="w-8 h-8 mx-auto mb-3 text-gray-400" /><h3 className="text-[16px] font-semibold">No Scenarios</h3></div>}
           </div>
         )}
       </main>
