@@ -29,8 +29,13 @@ Each object in the array MUST have exactly the following structure keys:
     "Given ...",
     "When ...",
     "Then ..."
+  ],
+  "examples": [
+    { "param1": "value1", "param2": "value2" }
   ]
 }
+
+If a scenario outline requires examples (like boundary tests or API params), include them in the "examples" array of objects. If no examples are needed, omit the key or return an empty array.
 
 CRITICAL EXHAUSTIVE COVERAGE RULE:
 UNLESS the user explicitly restricts the scope in the Custom Instructions, you MUST generate an EXHAUSTIVE suite of test cases covering ALL of the following categories by default:
@@ -52,17 +57,7 @@ TEST DATA RULE:
 1. Ensure the 'When' steps explicitly mention the HTTP method (GET, POST, PUT, DELETE) and the precise endpoint path.
 2. Ensure the 'Then' steps explicitly validate the exact HTTP status codes (200, 201, 400, 401, 403, 404, 500).
 3. If path parameters exist (e.g., /pet/{petId}), generate boundary and invalid boundary tests for that specific parameter.
-4. Use Scenario Outlines heavily to iterate through multiple HTTP response scenarios.
-Example formatting for API test steps:
-"Given the API base URL is configured",
-"When I send a GET request to '/pet/<petId>'",
-"Then the response status code should be <statusCode>",
-"Examples:",
-"| petId | statusCode |",
-"| 1     | 200        |",
-"| -1    | 400        |",
-"| 999   | 404        |",
-"| 'OR1=1| 400        |"`;
+4. Use Scenario Outlines heavily to iterate through multiple HTTP response scenarios.`;
     } else {
        systemPrompt += `\n\nUI/FUNCTIONAL SPECIFIC INSTRUCTIONS:
 1. Focus on specific user actions, exact UI elements, and concrete assertions.
@@ -83,7 +78,7 @@ Example formatting for API test steps:
     === CUSTOM INSTRUCTIONS (OVERRIDES DEFAULT BEHAVIOR) ===
     ${testcasePrompt ? testcasePrompt : "No restrictions. You MUST generate maximum coverage scenarios exhaustively covering ALL categories (Smoke, Functional, Negative, Edge, Security, Non-Functional/Performance) with concrete test data."}
 
-    Remember: Return ONLY valid JSON matching the schema. No markdown wrapping. Include concrete TEST DATA in Examples tables prioritizing any user-provided values.`;
+    Remember: Return ONLY valid JSON matching the schema. No markdown wrapping. Include concrete TEST DATA in Examples arrays prioritizing any user-provided values.`;
 
     let generatedText = "";
     const provider = (llmProvider || "groq").toLowerCase();
@@ -143,7 +138,6 @@ Example formatting for API test steps:
         return NextResponse.json({ error: "AI response missing 'testCases' array." }, { status: 500 });
     }
 
-    // FRONTEND COMPATIBILITY FIX: Wraps in 'data' so setTestcasesData(res.data.data) works perfectly
     return NextResponse.json({ 
         success: true,
         data: { testCases: finalTestCases } 
